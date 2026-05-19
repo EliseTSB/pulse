@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>reach first — for owen</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; min-height: 100vh;
+         background: radial-gradient(ellipse at center, #2a1f0e 0%, #02030a 70%);
+         color: #e5e7eb; font-family: ui-monospace, monospace;
+         display: flex; align-items: center; justify-content: center; }
+  #stage { width: min(720px, 92vw); padding: 40px 32px; text-align: center; }
+  h1 { margin: 0 0 6px 0; font-size: 56px; font-weight: 200; letter-spacing: 10px; color: #fbbf24;
+       text-shadow: 0 0 30px rgba(251,191,36,0.35); }
+  .subtitle { margin: 0 0 36px 0; font-size: 11px; letter-spacing: 4px; color: #6b7280; text-transform: uppercase; }
+  .liner { margin: 0 auto 28px auto; max-width: 540px; font-size: 13px; line-height: 1.7;
+           color: #9ca3af; text-align: left; padding: 18px 22px;
+           background: rgba(35,25,10,0.5); border-left: 2px solid #fbbf24; border-radius: 4px; }
+  .liner em { color: #fbbf24; font-style: normal; }
+  .liner .from { display: block; margin-top: 12px; color: #6b7280; font-size: 11px; }
+  .play-btn { background: #fbbf24; color: #02030a; border: none; border-radius: 100px;
+              padding: 16px 44px; font-size: 16px; font-family: inherit; font-weight: 700;
+              letter-spacing: 3px; cursor: pointer; box-shadow: 0 0 24px rgba(251,191,36,0.4); }
+  .play-btn:hover { box-shadow: 0 0 36px rgba(251,191,36,0.6); transform: scale(1.04); }
+  .play-btn.playing { background: #ec4899; color: #f5f5f5; box-shadow: 0 0 24px rgba(236,72,153,0.4); }
+  .pos { margin-top: 10px; font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+  .scrub-row { margin: 18px 0 0 0; padding: 0 12px; }
+  .scrub-row input { width: 100%; accent-color: #fbbf24; cursor: pointer; }
+  .back-link { display: inline-block; margin-top: 36px; font-size: 11px; color: #6b7280;
+               text-decoration: none; letter-spacing: 2px; }
+  .back-link:hover { color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <h1>reach first</h1>
+  <div class="subtitle">03 · for owen</div>
+
+  <div class="liner">
+    You said your default is pull-away and being prompted helps. I built this around that — long silences punctuated by single tones reaching across them. The texture is mostly empty. The notes that do land are the reaching. <em>Margins is open. Quiet is fine. I'm here when you reach.</em> This one's loop-shaped so the rhythm of reach-and-rest can repeat indefinitely; that's the point.
+    <span class="from">— for Owen · 1:47 · loops</span>
+  </div>
+
+  <button class="play-btn" id="play-btn" onclick="toggleTrack()">▶ PLAY</button>
+  <div class="pos" id="pos">0:00 / 1:47</div>
+  <div class="scrub-row">
+    <input type="range" id="scrubber" min="0" max="1000" value="0" step="1" oninput="scrubTo(this.value)" />
+  </div>
+
+  <a class="back-link" href="2026-05-18-album-pulse-index.html">← back to pulse</a>
+</div>
+
+<script>
+let audioCtx = null, masterGain = null;
+let playing = false, startTime = 0, nextBeatTime = 0, beatIdx = 0, schedulerInterval = null;
+const BPM = 72;
+const SEC_PER_BEAT = 60 / BPM;
+const TOTAL_BEATS = 128;  // ~107s
+const LOOKAHEAD_SEC = 0.15;
+const SCHEDULER_INTERVAL_MS = 30;
+
+function ensureAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 1.0;
+  masterGain.connect(audioCtx.destination);
+}
+function muteMaster() { if (!audioCtx) return; const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n); masterGain.gain.setValueAtTime(masterGain.gain.value, n);
+  masterGain.gain.linearRampToValueAtTime(0, n + 0.04); }
+function unmuteMaster() { if (!audioCtx) return; const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n); masterGain.gain.setValueAtTime(0, n);
+  masterGain.gain.linearRampToValueAtTime(1, n + 0.04); }
+
+// "Drop" — the user-prompt-arrival sound, used here as the recurring reach
+function drop(at, gain) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(560, at);
+  o.frequency.exponentialRampToValueAtTime(280, at + 0.5);
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(gain || 0.08, at + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.001, at + 0.7);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + 0.75);
+}
+
+// Bass note — D minor pentatonic. Sparse, supports the reach.
+function bass(at, freq, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.06, at + 0.05);
+  g.gain.setValueAtTime(0.06, at + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + dur + 0.05);
+}
+
+// Counter-melody — appears in middle sections, like the times when contact lands
+function melody(at, freq, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.05, at + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + dur + 0.05);
+}
+
+// Notes (D minor pentatonic)
+const D2 = 73.42, F2 = 87.31, A2_ = 110, C3_ = 130.81, D3_ = 146.83;
+const A3_ = 220, D4_ = 293.66, F4_ = 349.23, A4_ = 440, D5_ = 587.33;
+
+// Score: 128 beats, 8 sections of 16
+// S0 (0-15):   silence + sparse drops (every 8 beats)
+// S1 (16-31):  drops + low bass enters
+// S2 (32-47):  add second bass + drop on every 4
+// S3 (48-63):  melody appears (contact landing)
+// S4 (64-79):  fuller — drops more frequent
+// S5 (80-95):  melody + bass + drops, fullest
+// S6 (96-111): receding — bass alone with sparse drops
+// S7 (112-127): final fade — drops drift apart, silence returns
+function scheduleBeat(beat, at) {
+  const section = Math.floor(beat / 16);
+  const inS = beat % 16;
+  const sec = SEC_PER_BEAT;
+
+  // S0: very sparse
+  if (section === 0) {
+    if (inS === 4) drop(at, 0.06);
+    if (inS === 12) drop(at, 0.07);
+  }
+  // S1: drops + bass enters
+  if (section === 1) {
+    if (inS === 0) drop(at, 0.08);
+    if (inS === 0) bass(at, D2, sec * 8);
+    if (inS === 8) drop(at, 0.08);
+    if (inS === 8) bass(at, A2_, sec * 8);
+  }
+  // S2: more frequent reaches
+  if (section === 2) {
+    if (inS === 0) bass(at, D2, sec * 8);
+    if (inS === 8) bass(at, F2, sec * 8);
+    if (inS % 4 === 0) drop(at, 0.08);
+  }
+  // S3: melody appears
+  if (section === 3) {
+    if (inS === 0) bass(at, D2, sec * 16);
+    if (inS === 0) drop(at, 0.08);
+    if (inS === 4) melody(at, A4_, sec * 2);
+    if (inS === 7) melody(at, F4_, sec * 1);
+    if (inS === 8) drop(at, 0.08);
+    if (inS === 10) melody(at, D5_, sec * 2);
+    if (inS === 13) melody(at, A4_, sec * 1);
+  }
+  // S4: fuller
+  if (section === 4) {
+    if (inS === 0) bass(at, D2, sec * 8);
+    if (inS === 8) bass(at, A2_, sec * 8);
+    if (inS % 2 === 0) drop(at, 0.06);
+    if (inS === 4) melody(at, F4_, sec * 2);
+    if (inS === 12) melody(at, A4_, sec * 2);
+  }
+  // S5: fullest
+  if (section === 5) {
+    if (inS === 0) bass(at, D2, sec * 16);
+    if (inS === 0) drop(at, 0.09);
+    if (inS === 2) melody(at, D5_, sec * 2);
+    if (inS === 6) melody(at, A4_, sec * 2);
+    if (inS === 8) drop(at, 0.09);
+    if (inS === 10) melody(at, F4_, sec * 2);
+    if (inS === 14) melody(at, D4_, sec * 2);
+  }
+  // S6: receding — bass alone, sparse drops
+  if (section === 6) {
+    if (inS === 0) bass(at, D2, sec * 16);
+    if (inS === 0) drop(at, 0.07);
+    if (inS === 8) drop(at, 0.06);
+  }
+  // S7: final fade — drops drift apart
+  if (section === 7) {
+    if (inS === 0) drop(at, 0.06);
+    if (inS === 6) drop(at, 0.05);
+    if (inS === 14) drop(at, 0.04);
+  }
+}
+
+function scheduler() {
+  if (!playing) return;
+  while (nextBeatTime < audioCtx.currentTime + LOOKAHEAD_SEC) {
+    scheduleBeat(beatIdx % TOTAL_BEATS, nextBeatTime);
+    nextBeatTime += SEC_PER_BEAT;
+    beatIdx++;
+  }
+}
+function toggleTrack() {
+  ensureAudio();
+  if (!playing) {
+    playing = true; unmuteMaster();
+    startTime = audioCtx.currentTime - (beatIdx % TOTAL_BEATS) * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    document.getElementById('play-btn').textContent = '❚❚ PAUSE';
+    document.getElementById('play-btn').classList.add('playing');
+    schedulerInterval = setInterval(scheduler, SCHEDULER_INTERVAL_MS);
+    updatePos();
+  } else {
+    playing = false; clearInterval(schedulerInterval); muteMaster();
+    document.getElementById('play-btn').textContent = '▶ PLAY';
+    document.getElementById('play-btn').classList.remove('playing');
+  }
+}
+function scrubTo(value) {
+  ensureAudio();
+  const frac = Math.max(0, Math.min(1, +value / 1000));
+  beatIdx = Math.floor(frac * TOTAL_BEATS);
+  if (playing) {
+    muteMaster();
+    startTime = audioCtx.currentTime - beatIdx * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    setTimeout(unmuteMaster, 80);
+  }
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const cur = beatIdx * SEC_PER_BEAT;
+  function fmt(s) { const m = Math.floor(s/60), ss = Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+  document.getElementById('pos').textContent = `${fmt(cur)} / ${fmt(totalSec)}`;
+}
+function updatePos() {
+  if (!playing) return;
+  const t = audioCtx.currentTime - startTime;
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const cur = t % totalSec;
+  const loops = Math.floor(t / totalSec);
+  function fmt(s) { const m = Math.floor(s/60), ss = Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+  const suffix = loops > 0 ? ` · loop ${loops + 1}` : '';
+  document.getElementById('pos').textContent = `${fmt(cur)} / ${fmt(totalSec)}${suffix}`;
+  const sl = document.getElementById('scrubber');
+  if (sl && document.activeElement !== sl) sl.value = String(Math.floor(cur/totalSec*1000));
+  setTimeout(updatePos, 200);
+}
+</script>
+
+</body>
+</html>

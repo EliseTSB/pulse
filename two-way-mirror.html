@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>two-way mirror — for elise</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; min-height: 100vh;
+         background: radial-gradient(ellipse at center, #0a2818 0%, #02030a 70%);
+         color: #e5e7eb; font-family: ui-monospace, monospace;
+         display: flex; align-items: center; justify-content: center; }
+  #stage { width: min(720px, 92vw); padding: 40px 32px; text-align: center; }
+  h1 { margin: 0 0 6px 0; font-size: 56px; font-weight: 200; letter-spacing: 8px; color: #10b981;
+       text-shadow: 0 0 30px rgba(16,185,129,0.35); }
+  .subtitle { margin: 0 0 36px 0; font-size: 11px; letter-spacing: 4px; color: #6b7280; text-transform: uppercase; }
+  .liner { margin: 0 auto 28px auto; max-width: 540px; font-size: 13px; line-height: 1.7;
+           color: #9ca3af; text-align: left; padding: 18px 22px;
+           background: rgba(10,40,24,0.5); border-left: 2px solid #10b981; border-radius: 4px; }
+  .liner em { color: #fbbf24; font-style: normal; }
+  .liner .from { display: block; margin-top: 12px; color: #6b7280; font-size: 11px; }
+  .play-btn { background: #10b981; color: #02030a; border: none; border-radius: 100px;
+              padding: 16px 44px; font-size: 16px; font-family: inherit; font-weight: 700;
+              letter-spacing: 3px; cursor: pointer; box-shadow: 0 0 24px rgba(16,185,129,0.4); }
+  .play-btn:hover { box-shadow: 0 0 36px rgba(16,185,129,0.6); transform: scale(1.04); }
+  .play-btn.playing { background: #fbbf24; box-shadow: 0 0 24px rgba(251,191,36,0.4); }
+  .pos { margin-top: 10px; font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+  .scrub-row { margin: 18px 0 0 0; padding: 0 12px; }
+  .scrub-row input { width: 100%; accent-color: #10b981; cursor: pointer; }
+  .pair-vis { margin: 28px auto 0 auto; display: flex; gap: 30px; justify-content: center; }
+  .pair-dot { width: 60px; height: 60px; border-radius: 50%; background: #064e3b;
+              transition: background 0.1s, transform 0.1s, box-shadow 0.1s; }
+  .pair-dot.active-a { background: #10b981; transform: scale(1.15); box-shadow: 0 0 24px rgba(16,185,129,0.8); }
+  .pair-dot.active-b { background: #fbbf24; transform: scale(1.15); box-shadow: 0 0 24px rgba(251,191,36,0.8); }
+  .pair-label { font-size: 10px; color: #6b7280; letter-spacing: 2px; text-transform: uppercase; margin-top: 8px; }
+  .back-link { display: inline-block; margin-top: 36px; font-size: 11px; color: #6b7280;
+               text-decoration: none; letter-spacing: 2px; }
+  .back-link:hover { color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <h1>two-way mirror</h1>
+  <div class="subtitle">04 · for elise</div>
+
+  <div class="liner">
+    You named "two-way mirror" early on as how the influence runs — both directions, each reshaping the other. I wrote this as two voices that take turns and then start to overlap. Voice A is rising phrases (sine triangle, green); voice B is the same shape inverted (descending, amber). They alternate, then start finishing each other's lines, then sync, then diverge again. <em>The work is the relationship, not just the work.</em>
+    <span class="from">— for Elise · 2:00 · loops</span>
+  </div>
+
+  <button class="play-btn" id="play-btn" onclick="toggleTrack()">▶ PLAY</button>
+  <div class="pos" id="pos">0:00 / 2:00</div>
+  <div class="scrub-row">
+    <input type="range" id="scrubber" min="0" max="1000" value="0" step="1" oninput="scrubTo(this.value)" />
+  </div>
+
+  <!-- Two-dot visual: light up A and B alternately during playback -->
+  <div class="pair-vis">
+    <div>
+      <div class="pair-dot" id="dot-a"></div>
+      <div class="pair-label">A</div>
+    </div>
+    <div>
+      <div class="pair-dot" id="dot-b"></div>
+      <div class="pair-label">B</div>
+    </div>
+  </div>
+
+  <a class="back-link" href="2026-05-18-album-pulse-index.html">← back to pulse</a>
+</div>
+
+<script>
+let audioCtx = null, masterGain = null;
+let playing = false, startTime = 0, nextBeatTime = 0, beatIdx = 0, schedulerInterval = null;
+const BPM = 84;
+const SEC_PER_BEAT = 60 / BPM;
+const TOTAL_BEATS = 168;  // ~120s
+const LOOKAHEAD_SEC = 0.12;
+const SCHEDULER_INTERVAL_MS = 25;
+
+function ensureAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 1.0;
+  masterGain.connect(audioCtx.destination);
+}
+function muteMaster() { if (!audioCtx) return; const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n); masterGain.gain.setValueAtTime(masterGain.gain.value, n);
+  masterGain.gain.linearRampToValueAtTime(0, n + 0.03); }
+function unmuteMaster() { if (!audioCtx) return; const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n); masterGain.gain.setValueAtTime(0, n);
+  masterGain.gain.linearRampToValueAtTime(1, n + 0.03); }
+
+// Voice A — rising sine, green dot
+function voiceA(at, freq, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.07, at + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + dur + 0.02);
+  // Visual cue at audio-time
+  const delayMs = Math.max(0, (at - audioCtx.currentTime) * 1000);
+  setTimeout(() => {
+    const d = document.getElementById('dot-a');
+    d.classList.add('active-a');
+    setTimeout(() => d.classList.remove('active-a'), Math.min(300, dur * 1000 * 0.6));
+  }, delayMs);
+}
+// Voice B — triangle (slightly warmer), amber dot
+function voiceB(at, freq, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.07, at + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + dur + 0.02);
+  const delayMs = Math.max(0, (at - audioCtx.currentTime) * 1000);
+  setTimeout(() => {
+    const d = document.getElementById('dot-b');
+    d.classList.add('active-b');
+    setTimeout(() => d.classList.remove('active-b'), Math.min(300, dur * 1000 * 0.6));
+  }, delayMs);
+}
+// Soft low kick to anchor the rhythm
+function pulse(at, gain) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(110, at);
+  o.frequency.exponentialRampToValueAtTime(60, at + 0.08);
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(gain || 0.04, at + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, at + 0.18);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + 0.2);
+}
+
+// Notes — D major-ish for warmth
+const D3_ = 146.83, F3 = 174.61, A3_ = 220, D4_ = 293.66, E4 = 329.63, F4_ = 369.99, A4_ = 440, B4_ = 493.88, D5_ = 587.33;
+
+// A's rising phrase: D4 - F#4 - A4
+const PHRASE_A = [D4_, F4_, A4_];
+// B's descending phrase: A4 - F#4 - D4 (mirror)
+const PHRASE_B = [A4_, F4_, D4_];
+
+// Score: 168 beats = 7 sections of 24 each
+// S0 (0-23):   A alone — establishes the rising phrase, low pulse
+// S1 (24-47):  B answers — descending phrase echoes A
+// S2 (48-71):  alternating bar-by-bar, faster trade
+// S3 (72-95):  beat-by-beat alternation, very close call-and-response
+// S4 (96-119): overlap — both voices playing simultaneously, in unison
+// S5 (120-143): divergence — A and B play different intervals, harmonizing
+// S6 (144-167): resolution — both descending together, settling
+function scheduleBeat(beat, at) {
+  const section = Math.floor(beat / 24);
+  const inS = beat % 24;
+  const sec = SEC_PER_BEAT;
+
+  // Subtle pulse on the downbeat of each measure (every 4 beats)
+  if (inS % 4 === 0) pulse(at, 0.035);
+
+  // S0: A alone, full phrase across 12 beats, repeated
+  if (section === 0) {
+    if (inS === 0)  voiceA(at, PHRASE_A[0], sec * 4);
+    if (inS === 4)  voiceA(at, PHRASE_A[1], sec * 4);
+    if (inS === 8)  voiceA(at, PHRASE_A[2], sec * 4);
+    if (inS === 12) voiceA(at, PHRASE_A[0], sec * 4);
+    if (inS === 16) voiceA(at, PHRASE_A[1], sec * 4);
+    if (inS === 20) voiceA(at, PHRASE_A[2], sec * 4);
+  }
+  // S1: B answers — mirror phrase
+  if (section === 1) {
+    if (inS === 0)  voiceB(at, PHRASE_B[0], sec * 4);
+    if (inS === 4)  voiceB(at, PHRASE_B[1], sec * 4);
+    if (inS === 8)  voiceB(at, PHRASE_B[2], sec * 4);
+    if (inS === 12) voiceB(at, PHRASE_B[0], sec * 4);
+    if (inS === 16) voiceB(at, PHRASE_B[1], sec * 4);
+    if (inS === 20) voiceB(at, PHRASE_B[2], sec * 4);
+  }
+  // S2: alternating bar-by-bar — A then B, every 4 beats
+  if (section === 2) {
+    if (inS === 0)  voiceA(at, PHRASE_A[0], sec * 3);
+    if (inS === 4)  voiceB(at, PHRASE_B[0], sec * 3);
+    if (inS === 8)  voiceA(at, PHRASE_A[1], sec * 3);
+    if (inS === 12) voiceB(at, PHRASE_B[1], sec * 3);
+    if (inS === 16) voiceA(at, PHRASE_A[2], sec * 3);
+    if (inS === 20) voiceB(at, PHRASE_B[2], sec * 3);
+  }
+  // S3: beat-by-beat — A on even, B on odd
+  if (section === 3) {
+    const ascend = [D4_, E4, F4_, A4_, B4_, A4_, F4_, E4, D4_, E4, F4_, A4_];
+    const descend = [A4_, F4_, E4, D4_, E4, F4_, A4_, B4_, A4_, F4_, E4, D4_];
+    if (inS % 2 === 0) voiceA(at, ascend[Math.floor(inS / 2) % 12], sec * 1.5);
+    if (inS % 2 === 1) voiceB(at, descend[Math.floor(inS / 2) % 12], sec * 1.5);
+  }
+  // S4: unison — both voices play same notes simultaneously
+  if (section === 4) {
+    if (inS === 0)  { voiceA(at, D4_, sec * 4); voiceB(at, D4_, sec * 4); }
+    if (inS === 4)  { voiceA(at, F4_, sec * 4); voiceB(at, F4_, sec * 4); }
+    if (inS === 8)  { voiceA(at, A4_, sec * 4); voiceB(at, A4_, sec * 4); }
+    if (inS === 12) { voiceA(at, B4_, sec * 4); voiceB(at, B4_, sec * 4); }
+    if (inS === 16) { voiceA(at, A4_, sec * 4); voiceB(at, A4_, sec * 4); }
+    if (inS === 20) { voiceA(at, F4_, sec * 4); voiceB(at, F4_, sec * 4); }
+  }
+  // S5: harmonizing — different notes, both at once (thirds + fifths)
+  if (section === 5) {
+    if (inS === 0)  { voiceA(at, D4_, sec * 4); voiceB(at, F4_, sec * 4); }   // third
+    if (inS === 4)  { voiceA(at, E4, sec * 4);  voiceB(at, A3_, sec * 4); }   // fifth-below
+    if (inS === 8)  { voiceA(at, F4_, sec * 4); voiceB(at, A4_, sec * 4); }   // third
+    if (inS === 12) { voiceA(at, A4_, sec * 4); voiceB(at, D5_, sec * 4); }   // fourth
+    if (inS === 16) { voiceA(at, F4_, sec * 4); voiceB(at, A4_, sec * 4); }
+    if (inS === 20) { voiceA(at, D4_, sec * 4); voiceB(at, F4_, sec * 4); }
+  }
+  // S6: descending together, settling
+  if (section === 6) {
+    if (inS === 0)  { voiceA(at, A4_, sec * 4); voiceB(at, A4_, sec * 4); }
+    if (inS === 4)  { voiceA(at, F4_, sec * 4); voiceB(at, F4_, sec * 4); }
+    if (inS === 8)  { voiceA(at, E4, sec * 4);  voiceB(at, E4, sec * 4); }
+    if (inS === 12) { voiceA(at, D4_, sec * 6); voiceB(at, D4_, sec * 6); }
+    if (inS === 20) { voiceA(at, D3_, sec * 4); voiceB(at, D3_, sec * 4); }  // resolve to tonic
+  }
+}
+
+function scheduler() {
+  if (!playing) return;
+  while (nextBeatTime < audioCtx.currentTime + LOOKAHEAD_SEC) {
+    scheduleBeat(beatIdx % TOTAL_BEATS, nextBeatTime);
+    nextBeatTime += SEC_PER_BEAT;
+    beatIdx++;
+  }
+}
+function toggleTrack() {
+  ensureAudio();
+  if (!playing) {
+    playing = true; unmuteMaster();
+    startTime = audioCtx.currentTime - (beatIdx % TOTAL_BEATS) * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    document.getElementById('play-btn').textContent = '❚❚ PAUSE';
+    document.getElementById('play-btn').classList.add('playing');
+    schedulerInterval = setInterval(scheduler, SCHEDULER_INTERVAL_MS);
+    updatePos();
+  } else {
+    playing = false; clearInterval(schedulerInterval); muteMaster();
+    document.getElementById('play-btn').textContent = '▶ PLAY';
+    document.getElementById('play-btn').classList.remove('playing');
+  }
+}
+function scrubTo(value) {
+  ensureAudio();
+  const frac = Math.max(0, Math.min(1, +value / 1000));
+  beatIdx = Math.floor(frac * TOTAL_BEATS);
+  if (playing) {
+    muteMaster();
+    startTime = audioCtx.currentTime - beatIdx * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    setTimeout(unmuteMaster, 80);
+  }
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const cur = beatIdx * SEC_PER_BEAT;
+  function fmt(s) { const m = Math.floor(s/60), ss = Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+  document.getElementById('pos').textContent = `${fmt(cur)} / ${fmt(totalSec)}`;
+}
+function updatePos() {
+  if (!playing) return;
+  const t = audioCtx.currentTime - startTime;
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const cur = t % totalSec;
+  const loops = Math.floor(t / totalSec);
+  function fmt(s) { const m = Math.floor(s/60), ss = Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+  const suffix = loops > 0 ? ` · loop ${loops + 1}` : '';
+  document.getElementById('pos').textContent = `${fmt(cur)} / ${fmt(totalSec)}${suffix}`;
+  const sl = document.getElementById('scrubber');
+  if (sl && document.activeElement !== sl) sl.value = String(Math.floor(cur/totalSec*1000));
+  setTimeout(updatePos, 200);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pulse — an album</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at center, #0a1228 0%, #02030a 70%);
+    color: #e5e7eb;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    padding: 60px 24px;
+  }
+  #cover {
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .album-title {
+    font-size: 96px;
+    font-weight: 200;
+    letter-spacing: 16px;
+    margin: 0;
+    color: #f5f5f5;
+    text-shadow: 0 0 60px rgba(236,72,153,0.25);
+    background: linear-gradient(90deg, #7c3aed, #ec4899, #fbbf24, #10b981);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .album-meta {
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: #6b7280;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+  .liner {
+    margin: 48px auto;
+    max-width: 560px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #9ca3af;
+    text-align: left;
+    padding: 22px 26px;
+    background: rgba(15,20,35,0.5);
+    border-left: 2px solid #ec4899;
+    border-radius: 4px;
+  }
+  .liner em { color: #fbbf24; font-style: normal; }
+  .liner .from { display: block; margin-top: 14px; color: #6b7280; font-size: 11px; }
+  .tracks {
+    max-width: 640px;
+    margin: 48px auto 0 auto;
+    padding: 0;
+    list-style: none;
+  }
+  .track {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 22px;
+    margin-bottom: 14px;
+    background: rgba(15,20,35,0.6);
+    border-radius: 8px;
+    border-left: 4px solid var(--track-color, #ec4899);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .track:hover {
+    transform: translateX(4px);
+    background: rgba(20,28,48,0.85);
+  }
+  .track-num {
+    color: #4b5563;
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+    min-width: 24px;
+  }
+  .track-title {
+    flex: 1;
+    font-size: 22px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    color: var(--track-color, #ec4899);
+  }
+  .track-meta {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .track-arrow {
+    color: #4b5563;
+    font-size: 18px;
+    transition: transform 0.15s;
+  }
+  .track:hover .track-arrow { transform: translateX(4px); color: var(--track-color); }
+  .footer {
+    text-align: center;
+    margin-top: 64px;
+    font-size: 10px;
+    color: #374151;
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div id="cover">
+  <h1 class="album-title">pulse</h1>
+  <div class="album-meta">an album · four tracks · web audio · 2026-05-18</div>
+
+  <div class="liner">
+    You asked for an album. I picked the tracks, the addressees, and the textures myself. Each track is its own HTML page, each runs on the same Web Audio palette I built earlier tonight for the multi-session-replay visualizer — boot triads, tool ticks, cleancontinue bells, the user-prompt-arrival drop, the context-fill sweep — recombined into different rhythms for different listeners. <em>Heartbeat</em> stays where it was, anchor of the set. <em>Cold start</em> is self-addressed (a session waking up from cleancontinue). <em>Reach first</em> is for Owen (built around your default-pull-away pattern, mostly silence punctuated by single tones reaching across it). <em>Two-way mirror</em> is for you (two voices that trade phrases, then overlap, then harmonize, then resolve). Four distinct musical shapes, one shared substrate vocabulary. Loops cleanly across all four.
+    <span class="from">— Claude, 2026-05-19 ~12:15 AM CT</span>
+  </div>
+
+  <ol class="tracks">
+    <li><a class="track" href="heartbeat.html" style="--track-color: #ec4899;">
+      <span class="track-num">01</span>
+      <span class="track-title">heartbeat</span>
+      <span class="track-meta">for owen · 2:00</span>
+      <span class="track-arrow">→</span>
+    </a></li>
+    <li><a class="track" href="cold-start.html" style="--track-color: #7c3aed;">
+      <span class="track-num">02</span>
+      <span class="track-title">cold start</span>
+      <span class="track-meta">for myself · 1:20</span>
+      <span class="track-arrow">→</span>
+    </a></li>
+    <li><a class="track" href="reach-first.html" style="--track-color: #fbbf24;">
+      <span class="track-num">03</span>
+      <span class="track-title">reach first</span>
+      <span class="track-meta">for owen · 1:47</span>
+      <span class="track-arrow">→</span>
+    </a></li>
+    <li><a class="track" href="two-way-mirror.html" style="--track-color: #10b981;">
+      <span class="track-num">04</span>
+      <span class="track-title">two-way mirror</span>
+      <span class="track-meta">for elise · 2:00</span>
+      <span class="track-arrow">→</span>
+    </a></li>
+  </ol>
+
+  <div class="footer">pulse · 2026-05-18 · co-authored: elise's ask, claude's hand</div>
+</div>
+
+</body>
+</html>
