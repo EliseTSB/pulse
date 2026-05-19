@@ -312,13 +312,35 @@ function updatePos() {
 
 
 <script>
-// Parent-player integration: when embedded in pulse player, emit postMessage
-// on loop-boundary so the player can auto-advance. Polls the pos display
-// text every 500ms and detects "loop N" suffix changes (the existing display
-// mechanism in this song). When N increments, postMessage parent.
+// Parent-player integration (pulse player + auto-advance + auto-play).
 // Self-contained: harmless when standalone (window.parent === window).
 (function() {
   if (window.parent === window) return;
+
+  // Emit 'ready' to parent on init so the player knows the iframe loaded.
+  setTimeout(function() {
+    try { window.parent.postMessage({type: 'ready'}, '*'); } catch (e) {}
+  }, 150);
+
+  // Listen for 'play' commands from parent — programmatically click the
+  // play button to start the song. Works because the parent iframe has
+  // allow="autoplay" set, granting the iframe AudioContext.resume()
+  // permission without per-iframe user gesture.
+  window.addEventListener('message', function(e) {
+    const msg = e && e.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'play') {
+      const btn = document.getElementById('play-btn');
+      if (btn && btn.textContent.indexOf('PAUSE') === -1) {
+        // Only click if not already playing (button text shows PLAY, not PAUSE)
+        btn.click();
+      }
+    }
+  });
+
+  // Emit 'loopComplete' to parent on loop-boundary so the player can
+  // auto-advance. Polls the pos display textContent every 500ms and detects
+  // "loop N" suffix changes (the existing display mechanism in this song).
   let lastLoop = 1;
   setInterval(function() {
     const pos = document.getElementById('pos');

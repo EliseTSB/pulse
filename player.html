@@ -207,6 +207,11 @@ let shuffle = false;
 let loopMode = 'all';  // 'off' | 'all' | 'one'
 let autoAdvance = true;
 let currentLoop = 1;
+// shouldAutoplay tracks "does the next iframe load get an auto-play?". Set
+// true when user starts playback (clicks play in iframe — detected via
+// loopComplete eventually, OR can be primed by clicking next/prev). Stays
+// true through auto-advances. Reset to false on initial page load.
+let shouldAutoplay = false;
 
 function renderPlaylist() {
   const ol = document.getElementById('playlist-list');
@@ -223,7 +228,7 @@ function renderPlaylist() {
       </div>
       <span class="track-meta">${track.addressee} · ${track.dur}</span>
     `;
-    a.onclick = (e) => { e.preventDefault(); loadTrack(idx); };
+    a.onclick = (e) => { e.preventDefault(); markAutoplayIntent(); loadTrack(idx); };
     li.appendChild(a);
     ol.appendChild(li);
   });
@@ -247,6 +252,7 @@ function loadTrack(idx) {
 }
 
 function nextTrack() {
+  markAutoplayIntent();
   if (loopMode === 'one') {
     // Loop-one mode override — replay same track
     loadTrack(currentIdx);
@@ -274,6 +280,7 @@ function nextTrack() {
 }
 
 function prevTrack() {
+  markAutoplayIntent();
   loadTrack(currentIdx - 1);
 }
 
@@ -297,13 +304,22 @@ function toggleAutoAdvance() {
 }
 
 // Listen for postMessages from the song iframes.
-//   {type: 'loopComplete'}     — sent when a song completes a loop
-//   {type: 'playing'}          — sent when user clicks play in song
-//   {type: 'paused'}           — sent when user clicks pause in song
+//   {type: 'ready'}        — sent when iframe init completes
+//   {type: 'loopComplete'} — sent when a song completes a loop
 window.addEventListener('message', (e) => {
   const msg = e.data;
   if (!msg || typeof msg !== 'object') return;
-  if (msg.type === 'loopComplete') {
+  if (msg.type === 'ready') {
+    // Iframe just loaded. If we should auto-play (i.e. user has already
+    // started playback once or hit a control), send play command back.
+    if (shouldAutoplay) {
+      const frame = document.getElementById('song-frame');
+      try { frame.contentWindow.postMessage({type: 'play'}, '*'); } catch (e2) {}
+    }
+  } else if (msg.type === 'loopComplete') {
+    // First loopComplete also implies the user already clicked play
+    // somewhere — set shouldAutoplay for future iframe-loads.
+    shouldAutoplay = true;
     currentLoop++;
     const loops = document.getElementById('np-loops');
     loops.textContent = `loop ${currentLoop}`;
@@ -313,6 +329,11 @@ window.addEventListener('message', (e) => {
     }
   }
 });
+
+// Hitting prev/next buttons is a user gesture in the parent — counts as
+// user activation for subsequent iframe autoplay attempts. Mark shouldAutoplay
+// so the next-loaded iframe gets auto-played.
+function markAutoplayIntent() { shouldAutoplay = true; }
 
 // Init
 renderPlaylist();
