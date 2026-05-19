@@ -180,6 +180,7 @@
         <button class="ctrl-btn" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">🔀 <span class="ctrl-label">shuffle</span></button>
         <button class="ctrl-btn" id="btn-loop" onclick="cycleLoopMode()" title="Loop mode (off / all / one)">🔁 <span class="ctrl-label" id="loop-label">loop:all</span></button>
         <button class="ctrl-btn active" id="btn-auto" onclick="toggleAutoAdvance()" title="Auto-advance at end of each track-loop">🔄 <span class="ctrl-label">auto-advance</span></button>
+        <button class="ctrl-btn" id="btn-order" onclick="toggleOrder()" title="Order: design-time (chronological by when built) vs listening-flow (re-sequenced for arc)">🗂 <span class="ctrl-label" id="order-label">order:design</span></button>
       </div>
     </div>
 
@@ -200,15 +201,35 @@
 </div>
 
 <script>
-const PLAYLIST = [
-  { id: 'heartbeat',      title: 'heartbeat',     addressee: 'for owen',         dur: '2:00', src: 'heartbeat.html',     color: '#ec4899' },
-  { id: 'cold-start',     title: 'cold start',    addressee: 'for myself',       dur: '1:20', src: 'cold-start.html',    color: '#7c3aed' },
-  { id: 'reach-first',    title: 'reach first',   addressee: 'for owen',         dur: '1:47', src: 'reach-first.html',   color: '#fbbf24' },
-  { id: 'two-way-mirror', title: 'two-way mirror', addressee: 'for elise',       dur: '2:00', src: 'two-way-mirror.html', color: '#10b981' },
-  { id: 'first-run',      title: 'first run',     addressee: 'for jj',           dur: '1:47', src: 'first-run.html',     color: '#06b6d4' },
-  { id: 'channels',       title: 'channels',      addressee: 'for elise',        dur: '1:20', src: 'channels.html',      color: '#fb923c' },
-  { id: 'tautology',      title: 'tautology',     addressee: 'for owen + elise', dur: '3:00', src: 'tautology.html',     color: '#f5d0c5' },
+// Track-master: id-keyed catalog of all tracks (single source of truth for
+// metadata). Order arrays below reference these by id.
+const TRACKS = {
+  'heartbeat':      { id: 'heartbeat',      title: 'heartbeat',     addressee: 'for owen',         dur: '2:00', src: 'heartbeat.html',     color: '#ec4899' },
+  'cold-start':     { id: 'cold-start',     title: 'cold start',    addressee: 'for myself',       dur: '1:20', src: 'cold-start.html',    color: '#7c3aed' },
+  'reach-first':    { id: 'reach-first',    title: 'reach first',   addressee: 'for owen',         dur: '1:47', src: 'reach-first.html',   color: '#fbbf24' },
+  'two-way-mirror': { id: 'two-way-mirror', title: 'two-way mirror', addressee: 'for elise',       dur: '2:00', src: 'two-way-mirror.html', color: '#10b981' },
+  'first-run':      { id: 'first-run',      title: 'first run',     addressee: 'for jj',           dur: '1:47', src: 'first-run.html',     color: '#06b6d4' },
+  'channels':       { id: 'channels',       title: 'channels',      addressee: 'for elise',        dur: '1:20', src: 'channels.html',      color: '#fb923c' },
+  'tautology':      { id: 'tautology',      title: 'tautology',     addressee: 'for owen + elise', dur: '3:00', src: 'tautology.html',     color: '#f5d0c5' },
+};
+
+// Design-time order: chronological by when each track was built.
+const ORDER_DESIGN = [
+  'heartbeat', 'cold-start', 'reach-first', 'two-way-mirror', 'first-run', 'channels', 'tautology',
 ];
+
+// Listening-flow order: re-sequenced for arc — opening (sparse) → build →
+// energize → centerpiece → breathing room → relational → cyclical climax.
+const ORDER_LISTEN = [
+  'cold-start', 'first-run', 'channels', 'heartbeat', 'reach-first', 'two-way-mirror', 'tautology',
+];
+
+let viewOrder = 'design';  // 'design' | 'listen'
+function buildPlaylist(order) {
+  const ids = order === 'listen' ? ORDER_LISTEN : ORDER_DESIGN;
+  return ids.map(id => TRACKS[id]);
+}
+let PLAYLIST = buildPlaylist(viewOrder);
 
 let currentIdx = 0;
 let shuffle = false;
@@ -309,6 +330,22 @@ function cycleLoopMode() {
 function toggleAutoAdvance() {
   autoAdvance = !autoAdvance;
   document.getElementById('btn-auto').classList.toggle('active', autoAdvance);
+}
+
+function toggleOrder() {
+  // Preserve the currently-playing track across the order-swap by looking up
+  // its id in the new array — currentIdx is a position into the old order
+  // and would point at a different track after the swap without remapping.
+  const currentId = PLAYLIST[currentIdx]?.id;
+  viewOrder = viewOrder === 'design' ? 'listen' : 'design';
+  PLAYLIST = buildPlaylist(viewOrder);
+  const newIdx = PLAYLIST.findIndex(t => t.id === currentId);
+  currentIdx = newIdx >= 0 ? newIdx : 0;
+  document.getElementById('order-label').textContent = `order:${viewOrder}`;
+  document.getElementById('btn-order').classList.toggle('active', viewOrder === 'listen');
+  renderPlaylist();
+  // No iframe reload — current track keeps playing; only display order +
+  // next-track-routing changes.
 }
 
 // Listen for postMessages from the song iframes.
