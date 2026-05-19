@@ -543,5 +543,31 @@ function updatePos() {
 }
 </script>
 
+
+<script>
+// Parent-player integration: when embedded in pulse player, emit postMessage
+// on loop-boundary so the player can auto-advance. Polls the pos display
+// text every 500ms and detects "loop N" suffix changes (the existing display
+// mechanism in this song). When N increments, postMessage parent.
+// Self-contained: harmless when standalone (window.parent === window).
+(function() {
+  if (window.parent === window) return;
+  let lastLoop = 1;
+  setInterval(function() {
+    const pos = document.getElementById('pos');
+    if (!pos) return;
+    const text = pos.textContent || '';
+    const m = text.match(/loop (\d+)/);
+    const loop = m ? parseInt(m[1], 10) : 1;
+    if (loop !== lastLoop && loop > lastLoop) {
+      lastLoop = loop;
+      try {
+        window.parent.postMessage({type: 'loopComplete', loop: loop}, '*');
+      } catch (e) {}
+    }
+  }, 500);
+})();
+</script>
+
 </body>
 </html>

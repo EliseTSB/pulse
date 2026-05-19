@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>pulse · player</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(120,50,90,0.18) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(50,80,140,0.18) 0%, transparent 50%),
+      radial-gradient(ellipse at center, #1a0c1f 0%, #02030a 70%);
+    color: #e5e7eb;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    padding: 20px;
+  }
+  #stage { max-width: 1080px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 24px; padding-top: 16px; }
+  h1 { font-size: 48px; font-weight: 200; letter-spacing: 10px; color: #f5d0c5;
+       text-shadow: 0 0 30px rgba(245,208,197,0.4); }
+  .album-meta { font-size: 11px; letter-spacing: 4px; color: #6b7280;
+                text-transform: uppercase; margin-top: 8px; }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+  }
+  @media (max-width: 880px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Player pane (left) */
+  .player {
+    background: rgba(15,15,25,0.5);
+    border: 1px solid rgba(245,208,197,0.15);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .now-playing {
+    padding: 16px 20px;
+    background: rgba(245,208,197,0.06);
+    border-bottom: 1px solid rgba(245,208,197,0.1);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+  .now-playing-text { min-width: 0; }
+  .now-playing-label { font-size: 9px; letter-spacing: 3px; color: #6b7280;
+                       text-transform: uppercase; margin-bottom: 4px; }
+  .now-playing-title { font-size: 20px; color: var(--track-color, #f5d0c5);
+                       letter-spacing: 3px; white-space: nowrap; overflow: hidden;
+                       text-overflow: ellipsis; }
+  .now-playing-meta { font-size: 11px; color: #9ca3af; margin-top: 4px;
+                      letter-spacing: 1px; }
+  .now-playing-loops { font-size: 10px; color: #fbbf24; letter-spacing: 2px;
+                       padding: 4px 10px; border-radius: 3px;
+                       background: rgba(251,191,36,0.1); white-space: nowrap; }
+
+  .iframe-wrapper {
+    height: 720px;
+    background: #02030a;
+    position: relative;
+  }
+  iframe { width: 100%; height: 100%; border: none; display: block; }
+
+  /* Controls row */
+  .controls {
+    padding: 14px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+    align-items: center; justify-content: center;
+    background: rgba(245,208,197,0.04);
+    border-top: 1px solid rgba(245,208,197,0.1);
+  }
+  .ctrl-btn {
+    background: rgba(245,208,197,0.08);
+    color: #f5d0c5;
+    border: 1px solid rgba(245,208,197,0.15);
+    border-radius: 100px;
+    padding: 8px 16px;
+    font-size: 14px; font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    letter-spacing: 1px;
+    min-width: 44px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ctrl-btn:hover { background: rgba(245,208,197,0.18); }
+  .ctrl-btn:active { transform: scale(0.96); }
+  .ctrl-btn.active { background: #f5d0c5; color: #02030a;
+                     box-shadow: 0 0 12px rgba(245,208,197,0.4); }
+  .ctrl-btn .ctrl-label { font-size: 10px; letter-spacing: 1px; opacity: 0.85; }
+
+  /* Playlist pane (right) */
+  .playlist {
+    background: rgba(15,15,25,0.5);
+    border: 1px solid rgba(245,208,197,0.15);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .playlist-header {
+    font-size: 10px; letter-spacing: 3px; color: #6b7280;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .playlist ol { list-style: none; }
+  .playlist li { display: block; margin-bottom: 4px; }
+  .track-item {
+    display: block; padding: 10px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    text-decoration: none; color: inherit;
+  }
+  .track-item:hover {
+    background: rgba(245,208,197,0.06);
+    border-color: rgba(245,208,197,0.15);
+  }
+  .track-item.playing {
+    background: rgba(245,208,197,0.12);
+    border-color: var(--track-color, rgba(245,208,197,0.4));
+  }
+  .track-item.playing .track-num,
+  .track-item.playing .track-title { color: var(--track-color, #f5d0c5); }
+  .track-num { display: inline-block; width: 26px; color: #6b7280;
+               font-size: 11px; letter-spacing: 1px; }
+  .track-title { color: #e5e7eb; font-size: 13px; letter-spacing: 1px; }
+  .track-meta { display: block; padding-left: 26px; font-size: 10px;
+                color: #6b7280; margin-top: 2px; letter-spacing: 1px; }
+
+  .liner {
+    grid-column: 1 / -1;
+    margin-top: 24px; padding: 16px 22px;
+    background: rgba(15,15,25,0.4);
+    border-left: 2px solid #f5d0c5;
+    border-radius: 4px;
+    font-size: 12px; line-height: 1.7; color: #9ca3af; max-width: 740px;
+  }
+  .liner em { color: #fbbf24; font-style: normal; }
+  .liner small { font-size: 10px; color: #6b7280; display: block; margin-top: 12px; letter-spacing: 1px; }
+
+  .back-link { display: block; text-align: center; margin-top: 24px;
+               font-size: 11px; color: #6b7280; text-decoration: none;
+               letter-spacing: 2px; }
+  .back-link:hover { color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <header>
+    <h1>pulse · player</h1>
+    <div class="album-meta">6 tracks · web audio · 2026-05-18 → 2026-05-19</div>
+  </header>
+
+  <div class="main-grid">
+    <div class="player">
+      <div class="now-playing" id="now-playing">
+        <div class="now-playing-text">
+          <div class="now-playing-label">now playing</div>
+          <div class="now-playing-title" id="np-title">—</div>
+          <div class="now-playing-meta" id="np-meta">—</div>
+        </div>
+        <div class="now-playing-loops" id="np-loops" style="display:none;">loop 1</div>
+      </div>
+      <div class="iframe-wrapper">
+        <iframe id="song-frame" title="now playing" allow="autoplay"></iframe>
+      </div>
+      <div class="controls">
+        <button class="ctrl-btn" onclick="prevTrack()" title="Previous track">⏮ prev</button>
+        <button class="ctrl-btn" onclick="nextTrack()" title="Next track">next ⏭</button>
+        <button class="ctrl-btn" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">🔀 <span class="ctrl-label">shuffle</span></button>
+        <button class="ctrl-btn" id="btn-loop" onclick="cycleLoopMode()" title="Loop mode (off / all / one)">🔁 <span class="ctrl-label" id="loop-label">loop:all</span></button>
+        <button class="ctrl-btn active" id="btn-auto" onclick="toggleAutoAdvance()" title="Auto-advance at end of each track-loop">🔄 <span class="ctrl-label">auto-advance</span></button>
+      </div>
+    </div>
+
+    <div class="playlist">
+      <div class="playlist-header">playlist</div>
+      <ol id="playlist-list"></ol>
+    </div>
+
+    <div class="liner">
+      Click any track in the playlist to load it, or use prev/next to step through. Each song has its own controls (play/pause/scrub) inside the frame — those still work normally; the player layer adds <em>playlist + auto-advance</em> on top.
+      <br /><br />
+      Auto-advance triggers at the end of each track-loop (the song postMessages the player when it completes a loop). If you turn it off, the current track keeps looping in place forever. Loop-one overrides: even with auto-advance on, loop-one keeps the current track. Shuffle picks the next track at random from the playlist.
+      <small>— player · 2026-05-19 ~1:00 PM CT · pulse v6</small>
+    </div>
+  </div>
+
+  <a class="back-link" href="index.html">← static index</a>
+</div>
+
+<script>
+const PLAYLIST = [
+  { id: 'heartbeat',      title: 'heartbeat',     addressee: 'for owen',         dur: '2:00', src: 'heartbeat.html',  color: '#ec4899' },
+  { id: 'cold-start',     title: 'cold start',    addressee: 'for myself',       dur: '1:20', src: 'cold-start.html',          color: '#7c3aed' },
+  { id: 'reach-first',    title: 'reach first',   addressee: 'for owen',         dur: '1:47', src: 'reach-first.html',         color: '#fbbf24' },
+  { id: 'two-way-mirror', title: 'two-way mirror', addressee: 'for elise',       dur: '2:00', src: 'two-way-mirror.html',      color: '#10b981' },
+  { id: 'first-run',      title: 'first run',     addressee: 'for jj',           dur: '1:47', src: 'first-run.html',    color: '#06b6d4' },
+  { id: 'tautology',      title: 'tautology',     addressee: 'for owen + elise', dur: '3:00', src: 'tautology.html',           color: '#f5d0c5' },
+];
+
+let currentIdx = 0;
+let shuffle = false;
+let loopMode = 'all';  // 'off' | 'all' | 'one'
+let autoAdvance = true;
+let currentLoop = 1;
+
+function renderPlaylist() {
+  const ol = document.getElementById('playlist-list');
+  ol.innerHTML = '';
+  PLAYLIST.forEach((track, idx) => {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.className = 'track-item' + (idx === currentIdx ? ' playing' : '');
+    a.style.setProperty('--track-color', track.color);
+    a.innerHTML = `
+      <div>
+        <span class="track-num">${String(idx + 1).padStart(2, '0')}</span>
+        <span class="track-title">${track.title}</span>
+      </div>
+      <span class="track-meta">${track.addressee} · ${track.dur}</span>
+    `;
+    a.onclick = (e) => { e.preventDefault(); loadTrack(idx); };
+    li.appendChild(a);
+    ol.appendChild(li);
+  });
+}
+
+function loadTrack(idx) {
+  currentIdx = (idx + PLAYLIST.length) % PLAYLIST.length;
+  const track = PLAYLIST[currentIdx];
+  const frame = document.getElementById('song-frame');
+  frame.src = track.src;
+  // Update now-playing display
+  const npTitle = document.getElementById('np-title');
+  const npMeta = document.getElementById('np-meta');
+  npTitle.textContent = track.title;
+  npTitle.style.setProperty('--track-color', track.color);
+  npMeta.textContent = `${track.addressee} · ${track.dur}`;
+  document.getElementById('now-playing').style.setProperty('--track-color', track.color);
+  document.getElementById('np-loops').style.display = 'none';
+  currentLoop = 1;
+  renderPlaylist();
+}
+
+function nextTrack() {
+  if (loopMode === 'one') {
+    // Loop-one mode override — replay same track
+    loadTrack(currentIdx);
+    return;
+  }
+  if (shuffle) {
+    if (PLAYLIST.length <= 1) { loadTrack(currentIdx); return; }
+    let nextIdx;
+    do {
+      nextIdx = Math.floor(Math.random() * PLAYLIST.length);
+    } while (nextIdx === currentIdx);
+    loadTrack(nextIdx);
+    return;
+  }
+  const next = currentIdx + 1;
+  if (next >= PLAYLIST.length) {
+    if (loopMode === 'all') {
+      loadTrack(0);
+    } else {
+      // Loop off — stay on last track but don't auto-advance again
+    }
+  } else {
+    loadTrack(next);
+  }
+}
+
+function prevTrack() {
+  loadTrack(currentIdx - 1);
+}
+
+function toggleShuffle() {
+  shuffle = !shuffle;
+  const btn = document.getElementById('btn-shuffle');
+  btn.classList.toggle('active', shuffle);
+}
+
+function cycleLoopMode() {
+  const modes = ['off', 'all', 'one'];
+  loopMode = modes[(modes.indexOf(loopMode) + 1) % modes.length];
+  document.getElementById('loop-label').textContent = `loop:${loopMode}`;
+  const btn = document.getElementById('btn-loop');
+  btn.classList.toggle('active', loopMode !== 'off');
+}
+
+function toggleAutoAdvance() {
+  autoAdvance = !autoAdvance;
+  document.getElementById('btn-auto').classList.toggle('active', autoAdvance);
+}
+
+// Listen for postMessages from the song iframes.
+//   {type: 'loopComplete'}     — sent when a song completes a loop
+//   {type: 'playing'}          — sent when user clicks play in song
+//   {type: 'paused'}           — sent when user clicks pause in song
+window.addEventListener('message', (e) => {
+  const msg = e.data;
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.type === 'loopComplete') {
+    currentLoop++;
+    const loops = document.getElementById('np-loops');
+    loops.textContent = `loop ${currentLoop}`;
+    loops.style.display = '';
+    if (autoAdvance) {
+      nextTrack();
+    }
+  }
+});
+
+// Init
+renderPlaylist();
+loadTrack(0);
+</script>
+
+</body>
+</html>
