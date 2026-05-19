@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>first run — for jj</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; min-height: 100vh;
+         background: radial-gradient(ellipse at center, #0a1e2a 0%, #02030a 70%);
+         color: #e5e7eb; font-family: ui-monospace, monospace;
+         display: flex; align-items: center; justify-content: center; }
+  #stage { width: min(720px, 92vw); padding: 40px 32px; text-align: center; }
+  h1 { margin: 0 0 6px 0; font-size: 56px; font-weight: 200; letter-spacing: 10px; color: #06b6d4;
+       text-shadow: 0 0 30px rgba(6,182,212,0.4); transition: color 0.15s, text-shadow 0.15s; }
+  h1.beat { color: #fbbf24; text-shadow: 0 0 40px rgba(251,191,36,0.6); }
+  .subtitle { margin: 0 0 36px 0; font-size: 11px; letter-spacing: 4px; color: #6b7280; text-transform: uppercase; }
+  .liner { margin: 0 auto 28px auto; max-width: 540px; font-size: 13px; line-height: 1.7;
+           color: #9ca3af; text-align: left; padding: 18px 22px;
+           background: rgba(10,30,42,0.5); border-left: 2px solid #06b6d4; border-radius: 4px; }
+  .liner em { color: #fbbf24; font-style: normal; }
+  .liner .from { display: block; margin-top: 12px; color: #6b7280; font-size: 11px; }
+  .play-btn { background: #06b6d4; color: #02030a; border: none; border-radius: 100px;
+              padding: 16px 44px; font-size: 16px; font-family: inherit; font-weight: 700;
+              letter-spacing: 3px; cursor: pointer; box-shadow: 0 0 24px rgba(6,182,212,0.4); }
+  .play-btn:hover { box-shadow: 0 0 36px rgba(6,182,212,0.6); transform: scale(1.04); }
+  .play-btn.playing { background: #fbbf24; box-shadow: 0 0 24px rgba(251,191,36,0.4); }
+  .pos { margin-top: 10px; font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+  .scrub-row { margin: 18px 0 0 0; padding: 0 12px; }
+  .scrub-row input { width: 100%; accent-color: #06b6d4; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <h1 id="title">first run</h1>
+  <div class="subtitle">a song · for jj</div>
+
+  <div class="liner">
+    Hey JJ — Claude here. Made you a song. It's about the texture of the moment when code finally works after you've been at it a while. The structure walks an iteration arc: a single phrase tries, stumbles, adjusts, tries again, gets a little further each time, then somewhere around the middle the layers click together and the thing just runs. The ending doesn't go big and triumphant — it settles into <em>running cleanly</em>, which is its own kind of arrival. Loops, so you can leave it on while you build.
+    <span class="from">— for JJ · 1:47 · loops · web audio synthesis</span>
+  </div>
+
+  <button class="play-btn" id="play-btn" onclick="toggleTrack()">▶ PLAY</button>
+  <div class="pos" id="pos">0:00 / 1:47</div>
+  <div class="scrub-row">
+    <input type="range" id="scrubber" min="0" max="1000" value="0" step="1" oninput="scrubTo(this.value)" />
+  </div>
+</div>
+
+<script>
+let audioCtx = null, masterGain = null;
+let playing = false, startTime = 0, nextBeatTime = 0, beatIdx = 0, schedulerInterval = null;
+const BPM = 108;
+const SEC_PER_BEAT = 60 / BPM;
+const TOTAL_BEATS = 32 * 6;  // 192 beats ~ 1:47
+const LOOKAHEAD_SEC = 0.12;
+const SCHEDULER_INTERVAL_MS = 25;
+
+function ensureAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 1.0;
+  masterGain.connect(audioCtx.destination);
+}
+function muteMaster() { if (!audioCtx) return; const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n); masterGain.gain.setValueAtTime(masterGain.gain.value, n);
+  masterGain.gain.linearRampToValueAtTime(0, n + 0.03); }
+function unmuteMaster() { if (!audioCtx) return; const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n); masterGain.gain.setValueAtTime(0, n);
+  masterGain.gain.linearRampToValueAtTime(1, n + 0.03); }
+
+function flashTitle() {
+  const t = document.getElementById('title');
+  t.classList.add('beat');
+  setTimeout(() => t.classList.remove('beat'), 100);
+}
+
+// Kick — steady pulse
+function kick(at, gain) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(120, at);
+  o.frequency.exponentialRampToValueAtTime(55, at + 0.08);
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(gain || 0.35, at + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, at + 0.16);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + 0.18);
+  const delayMs = Math.max(0, (at - audioCtx.currentTime) * 1000);
+  setTimeout(flashTitle, delayMs);
+}
+
+// Tool-tick — used as iteration percussion (each tick = a build attempt)
+function tick(at, freq, type) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'square';
+  o.frequency.setValueAtTime(freq, at);
+  g.gain.setValueAtTime(0.05, at);
+  g.gain.exponentialRampToValueAtTime(0.001, at + 0.07);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + 0.08);
+}
+
+// Bass — the foundation settling in
+function bass(at, freq, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.06, at + 0.02);
+  g.gain.setValueAtTime(0.06, at + dur * 0.7);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + dur + 0.02);
+}
+
+// Lead — the phrase that iterates
+function lead(at, freq, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(0.08, at + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  o.connect(g).connect(masterGain);
+  o.start(at); o.stop(at + dur + 0.02);
+}
+
+// Chime — the "it works" landing sound (like the cleancontinue bell but warmer)
+function chime(at) {
+  [880, 1175].forEach((freq, i) => {
+    const start = at + i * 0.04;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(0.1, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+    o.connect(g).connect(masterGain);
+    o.start(start); o.stop(start + 0.55);
+  });
+}
+
+// Notes — C major, friendly and grounded (not the minor moodier feel of other tracks)
+const C2 = 65.41, G2 = 98, C3 = 130.81, E3 = 164.81, G3 = 195.99, C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 391.99, A4 = 440, C5 = 523.25, D5 = 587.33, E5 = 659.25;
+
+// PHRASE — a 4-bar idea that iterates with variation. Each iteration in the
+// score below shows it landing slightly differently as the "build" matures.
+const PHRASE_A = [C4, E4, G4, E4];           // attempt 1 — clean ascent
+const PHRASE_B = [C4, E4, G4, A4];           // attempt 2 — pushed one note further
+const PHRASE_C = [C4, E4, G4, C5];           // attempt 3 — landed an octave
+const PHRASE_D = [E4, G4, C5, D5];           // attempt 4 — fully extended
+
+// Score: 192 beats, 6 sections of 32
+// S0 (0-31):   single phrase A trying, sparse ticks, no bass — first attempts
+// S1 (32-63):  phrase B (extended), bass joins underneath, more ticks
+// S2 (64-95):  phrase C (octave reach), tick percussion fills out, kick steady
+// S3 (96-127): CHIME — the "it works" landing. Phrase D plays at full extension. All layers in.
+// S4 (128-159): Running cleanly — phrase D continues, ticks become sparse (iteration done),
+//               just bass + kick + phrase humming along
+// S5 (160-191): Settling — kick continues, phrase D sustains and fades, leaves bass + kick
+//               cycling. Loop boundary continues the running.
+function scheduleBeat(beat, at) {
+  const section = Math.floor(beat / 32);
+  const inS = beat % 32;
+  const sec = SEC_PER_BEAT;
+
+  // Kick — present from S1 onward, fades in across S0
+  if (section === 0 && inS >= 16 && inS % 4 === 0) kick(at, 0.2 + (inS - 16) / 16 * 0.15);
+  if (section >= 1 && section <= 4 && inS % 4 === 0) kick(at, 0.35);
+  if (section === 5 && inS % 4 === 0) kick(at, 0.35 - (inS / 32) * 0.15);  // gentle fade
+
+  // S0 — phrase A trying, just lead + sparse ticks
+  if (section === 0) {
+    if (inS === 0)  lead(at, PHRASE_A[0], sec * 2);
+    if (inS === 2)  lead(at, PHRASE_A[1], sec * 2);
+    if (inS === 4)  lead(at, PHRASE_A[2], sec * 2);
+    if (inS === 6)  lead(at, PHRASE_A[3], sec * 2);
+    if (inS === 8)  tick(at, 660, 'sine');  // sparse build-attempt
+    if (inS === 16) lead(at, PHRASE_A[0], sec * 2);
+    if (inS === 18) lead(at, PHRASE_A[1], sec * 2);
+    if (inS === 20) lead(at, PHRASE_A[2], sec * 2);
+    if (inS === 22) lead(at, PHRASE_A[3], sec * 2);
+    if (inS === 24) tick(at, 660, 'sine');
+    if (inS === 28) tick(at, 740, 'sine');
+  }
+  // S1 — bass joins, phrase B (pushed further)
+  if (section === 1) {
+    if (inS === 0)  bass(at, C2, sec * 16);
+    if (inS === 16) bass(at, G2, sec * 16);
+    if (inS === 0)  lead(at, PHRASE_B[0], sec * 2);
+    if (inS === 2)  lead(at, PHRASE_B[1], sec * 2);
+    if (inS === 4)  lead(at, PHRASE_B[2], sec * 2);
+    if (inS === 6)  lead(at, PHRASE_B[3], sec * 2);
+    if (inS === 16) lead(at, PHRASE_B[0], sec * 2);
+    if (inS === 18) lead(at, PHRASE_B[1], sec * 2);
+    if (inS === 20) lead(at, PHRASE_B[2], sec * 2);
+    if (inS === 22) lead(at, PHRASE_B[3], sec * 2);
+    if (inS % 8 === 4) tick(at, 660, 'sine');
+    if (inS === 12) tick(at, 520, 'square');  // edit-tool tick — fixing something
+    if (inS === 28) tick(at, 520, 'square');
+  }
+  // S2 — phrase C (octave reach), denser tick percussion
+  if (section === 2) {
+    if (inS === 0)  bass(at, C2, sec * 16);
+    if (inS === 16) bass(at, E3 * 0.25, sec * 16);  // E2-ish
+    if (inS === 0)  lead(at, PHRASE_C[0], sec * 2);
+    if (inS === 2)  lead(at, PHRASE_C[1], sec * 2);
+    if (inS === 4)  lead(at, PHRASE_C[2], sec * 2);
+    if (inS === 6)  lead(at, PHRASE_C[3], sec * 3);
+    if (inS === 16) lead(at, PHRASE_C[0], sec * 2);
+    if (inS === 18) lead(at, PHRASE_C[1], sec * 2);
+    if (inS === 20) lead(at, PHRASE_C[2], sec * 2);
+    if (inS === 22) lead(at, PHRASE_C[3], sec * 3);
+    if (inS % 4 === 2) tick(at, 660, 'sine');
+    if (inS % 8 === 6) tick(at, 520, 'square');
+    if (inS === 31) tick(at, 1100, 'sine');  // about to land
+  }
+  // S3 — IT WORKS. Chime fires, phrase D at full extension, all layers
+  if (section === 3) {
+    if (inS === 0) chime(at);
+    if (inS === 0)  bass(at, C2, sec * 8);
+    if (inS === 8)  bass(at, G2, sec * 8);
+    if (inS === 16) bass(at, C2, sec * 8);
+    if (inS === 24) bass(at, G2, sec * 8);
+    if (inS === 0)  lead(at, PHRASE_D[0], sec * 2);
+    if (inS === 2)  lead(at, PHRASE_D[1], sec * 2);
+    if (inS === 4)  lead(at, PHRASE_D[2], sec * 2);
+    if (inS === 6)  lead(at, PHRASE_D[3], sec * 4);
+    if (inS === 16) lead(at, PHRASE_D[0], sec * 2);
+    if (inS === 18) lead(at, PHRASE_D[1], sec * 2);
+    if (inS === 20) lead(at, PHRASE_D[2], sec * 2);
+    if (inS === 22) lead(at, PHRASE_D[3], sec * 4);
+    if (inS % 4 === 2) tick(at, 660, 'sine');
+  }
+  // S4 — running cleanly, phrase humming, ticks sparse
+  if (section === 4) {
+    if (inS === 0)  bass(at, C2, sec * 16);
+    if (inS === 16) bass(at, G2, sec * 16);
+    if (inS === 0)  lead(at, PHRASE_D[0], sec * 3);
+    if (inS === 3)  lead(at, PHRASE_D[1], sec * 3);
+    if (inS === 6)  lead(at, PHRASE_D[2], sec * 3);
+    if (inS === 9)  lead(at, PHRASE_D[3], sec * 7);
+    if (inS === 16) lead(at, PHRASE_D[3], sec * 8);
+    if (inS === 24) lead(at, PHRASE_D[2], sec * 6);  // a small reflection
+    if (inS % 16 === 8) tick(at, 660, 'sine');
+  }
+  // S5 — settling, kick gentling, phrase fades, bass cycles into next loop
+  if (section === 5) {
+    if (inS === 0)  bass(at, C2, sec * 16);
+    if (inS === 16) bass(at, G2, sec * 16);
+    if (inS === 0)  lead(at, PHRASE_D[3], sec * 12);  // long sustained final phrase
+    if (inS === 16) lead(at, PHRASE_C[0], sec * 4);  // small return to C
+    if (inS === 24) tick(at, 740, 'sine');  // single sparse late tick — still running
+  }
+}
+
+function scheduler() {
+  if (!playing) return;
+  while (nextBeatTime < audioCtx.currentTime + LOOKAHEAD_SEC) {
+    scheduleBeat(beatIdx % TOTAL_BEATS, nextBeatTime);
+    nextBeatTime += SEC_PER_BEAT;
+    beatIdx++;
+  }
+}
+function toggleTrack() {
+  ensureAudio();
+  if (!playing) {
+    playing = true; unmuteMaster();
+    startTime = audioCtx.currentTime - (beatIdx % TOTAL_BEATS) * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    document.getElementById('play-btn').textContent = '❚❚ PAUSE';
+    document.getElementById('play-btn').classList.add('playing');
+    schedulerInterval = setInterval(scheduler, SCHEDULER_INTERVAL_MS);
+    updatePos();
+  } else {
+    playing = false; clearInterval(schedulerInterval); muteMaster();
+    document.getElementById('play-btn').textContent = '▶ PLAY';
+    document.getElementById('play-btn').classList.remove('playing');
+  }
+}
+function scrubTo(value) {
+  ensureAudio();
+  const frac = Math.max(0, Math.min(1, +value / 1000));
+  beatIdx = Math.floor(frac * TOTAL_BEATS);
+  if (playing) {
+    muteMaster();
+    startTime = audioCtx.currentTime - beatIdx * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    setTimeout(unmuteMaster, 80);
+  }
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const cur = beatIdx * SEC_PER_BEAT;
+  function fmt(s) { const m = Math.floor(s/60), ss = Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+  document.getElementById('pos').textContent = `${fmt(cur)} / ${fmt(totalSec)}`;
+}
+function updatePos() {
+  if (!playing) return;
+  const t = audioCtx.currentTime - startTime;
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const cur = t % totalSec;
+  const loops = Math.floor(t / totalSec);
+  function fmt(s) { const m = Math.floor(s/60), ss = Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+  const suffix = loops > 0 ? ` · loop ${loops + 1}` : '';
+  document.getElementById('pos').textContent = `${fmt(cur)} / ${fmt(totalSec)}${suffix}`;
+  const sl = document.getElementById('scrubber');
+  if (sl && document.activeElement !== sl) sl.value = String(Math.floor(cur/totalSec*1000));
+  setTimeout(updatePos, 200);
+}
+</script>
+
+</body>
+</html>

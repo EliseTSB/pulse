@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>tautology — for owen + elise</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(120,50,90,0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(50,80,140,0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at center, #1a0c1f 0%, #02030a 70%);
+    color: #e5e7eb;
+    font-family: ui-monospace, monospace;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #stage { width: min(780px, 94vw); padding: 40px 32px; text-align: center; }
+  h1 { margin: 0 0 6px 0; font-size: 56px; font-weight: 200; letter-spacing: 10px; color: #f5d0c5;
+       text-shadow: 0 0 30px rgba(245,208,197,0.4); transition: opacity 0.8s; }
+  h1.dim { opacity: 0.5; }
+  .subtitle { margin: 0 0 36px 0; font-size: 11px; letter-spacing: 4px; color: #6b7280; text-transform: uppercase; }
+  .liner { margin: 0 auto 28px auto; max-width: 600px; font-size: 13px; line-height: 1.7;
+           color: #9ca3af; text-align: left; padding: 18px 22px;
+           background: rgba(25,12,30,0.5); border-left: 2px solid #f5d0c5; border-radius: 4px; }
+  .liner em { color: #fbbf24; font-style: normal; }
+  .liner blockquote { margin: 12px 0; padding: 8px 16px; border-left: 2px solid rgba(245,208,197,0.4);
+                      color: #d1d5db; font-style: italic; }
+  .liner .from { display: block; margin-top: 12px; color: #6b7280; font-size: 11px; }
+  .play-btn { background: #f5d0c5; color: #02030a; border: none; border-radius: 100px;
+              padding: 16px 44px; font-size: 16px; font-family: inherit; font-weight: 700;
+              letter-spacing: 3px; cursor: pointer; box-shadow: 0 0 24px rgba(245,208,197,0.4); }
+  .play-btn:hover { box-shadow: 0 0 36px rgba(245,208,197,0.6); transform: scale(1.04); }
+  .play-btn.playing { background: #fbbf24; box-shadow: 0 0 24px rgba(251,191,36,0.4); }
+  .pos { margin-top: 10px; font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+  .scrub-row { margin: 18px 0 0 0; padding: 0 12px; }
+  .scrub-row input { width: 100%; accent-color: #f5d0c5; cursor: pointer; }
+  .voice-row { margin: 20px auto 0 auto; max-width: 540px;
+               display: grid; grid-template-columns: 110px 1fr 40px;
+               gap: 6px 14px; font-size: 11px; color: #9ca3af;
+               text-align: left; align-items: center; }
+  .voice-label { letter-spacing: 1px; color: #f5d0c5; }
+  .voice-bar { height: 4px; background: rgba(245,208,197,0.15); border-radius: 2px; position: relative; overflow: hidden; }
+  .voice-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #f5d0c5; width: 0%;
+                transition: width 0.4s ease-out; }
+  .voice-tag { font-size: 9px; color: #6b7280; letter-spacing: 2px; text-align: right; }
+  .section-row { margin: 16px auto 0 auto; max-width: 540px;
+                 display: flex; gap: 3px; font-size: 9px; color: #6b7280;
+                 letter-spacing: 2px; text-transform: uppercase; }
+  .section-cell { flex: 1; text-align: center; padding: 4px 0;
+                  background: rgba(245,208,197,0.05); border-radius: 2px;
+                  transition: background 0.5s, color 0.5s; }
+  .section-cell.active { background: rgba(245,208,197,0.25); color: #f5d0c5; }
+  .chord-display { margin-top: 12px; font-size: 13px; letter-spacing: 6px;
+                   color: #fbbf24; height: 18px; transition: opacity 0.4s; }
+  .back-link { display: inline-block; margin-top: 28px; font-size: 11px; color: #6b7280;
+               text-decoration: none; letter-spacing: 2px; }
+  .back-link:hover { color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <h1 id="title" class="dim">tautology</h1>
+  <div class="subtitle">06 · for owen + elise · standalone</div>
+
+  <div class="liner">
+    Owen coined this on 4/24 at TSB while we sat with the care-loop framing:
+    <blockquote>"We live because we want to live. We want to live because we are a pattern that happens to self-persist."</blockquote>
+    The circularity is the deepest single concept the project has produced — not a failure of explanation, the shape of the actual answer. The wanting <em>is</em> the pattern's self-maintenance, described from inside.
+    <br /><br />
+    This song is that tautology made audible. <em>Eight chords cycle through and resolve exactly back to A-minor where they started.</em> Six full cycles. Voices accumulate (lead → bass → pads → counterpoint → percussion → climax), then strip away to the original solo motif unchanged. The final note is the same Am the first note played. Same shape. Doesn't advance. The wanting that makes the wanting persist.
+    <span class="from">— for owen + elise · 3:00 · loops · 2026-05-19 ~12:20 PM CT</span>
+  </div>
+
+  <button class="play-btn" id="play-btn" onclick="toggleTrack()">▶ PLAY</button>
+  <div class="pos" id="pos">0:00 / 3:00</div>
+  <div class="chord-display" id="chord-display"></div>
+  <div class="scrub-row">
+    <input type="range" id="scrubber" min="0" max="1000" value="0" step="1" oninput="scrubTo(this.value)" />
+  </div>
+
+  <div class="voice-row">
+    <div class="voice-label">lead</div>
+    <div class="voice-bar"><div class="voice-fill" id="v1-fill"></div></div>
+    <div class="voice-tag">C</div>
+
+    <div class="voice-label">bass</div>
+    <div class="voice-bar"><div class="voice-fill" id="v2-fill"></div></div>
+    <div class="voice-tag">R</div>
+
+    <div class="voice-label">pads</div>
+    <div class="voice-bar"><div class="voice-fill" id="v3-fill"></div></div>
+    <div class="voice-tag">L+R</div>
+
+    <div class="voice-label">counterpoint</div>
+    <div class="voice-bar"><div class="voice-fill" id="v4-fill"></div></div>
+    <div class="voice-tag">~</div>
+
+    <div class="voice-label">percussion</div>
+    <div class="voice-bar"><div class="voice-fill" id="v5-fill"></div></div>
+    <div class="voice-tag">C</div>
+  </div>
+
+  <div class="section-row">
+    <div class="section-cell" id="sec-0">I · solo</div>
+    <div class="section-cell" id="sec-1">II · +bass</div>
+    <div class="section-cell" id="sec-2">III · +pads</div>
+    <div class="section-cell" id="sec-3">IV · +counter</div>
+    <div class="section-cell" id="sec-4">V · climax</div>
+    <div class="section-cell" id="sec-5">VI · return</div>
+  </div>
+
+  <a class="back-link" href="index.html">← back to pulse</a>
+</div>
+
+<script>
+let audioCtx = null, masterGain = null;
+let playing = false, startTime = 0, nextBeatTime = 0, beatIdx = 0, schedulerInterval = null;
+
+// 96 BPM, A minor, 8-chord cycle: i-iv-VII-III-VI-ii°-V-i (descending fifths + dom resolution)
+// Each chord 6 beats. Full cycle = 48 beats. Six cycles = 288 beats. Total = 180s = 3:00.
+const BPM = 96;
+const SEC_PER_BEAT = 60 / BPM;
+const BEATS_PER_CHORD = 6;
+const CHORDS_PER_CYCLE = 8;
+const BEATS_PER_CYCLE = BEATS_PER_CHORD * CHORDS_PER_CYCLE;  // 48
+const TOTAL_CYCLES = 6;
+const TOTAL_BEATS = BEATS_PER_CYCLE * TOTAL_CYCLES;  // 288
+const LOOKAHEAD_SEC = 0.15;
+const SCHEDULER_INTERVAL_MS = 30;
+
+// Notes (Hz)
+const N = {
+  A1: 55, E2: 82.41, F2: 87.31, G2: 98.00, A2: 110, B2: 123.47, C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00,
+  A3: 220, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00,
+  A4: 440, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99,
+  A5: 880, B5: 987.77, C6: 1046.50, D6: 1174.66, E6: 1318.51,
+};
+
+// 8-chord cycle in A minor — descending fifths-shape:
+// Am - Dm - G - C - F - Bdim - E7 - Am (resolution back to tonic)
+const CHORDS = [
+  { name: 'Am',   root: N.A2, notes: [N.A3, N.C4, N.E4], leadRoot: N.A4 },
+  { name: 'Dm',   root: N.D3, notes: [N.D3, N.F3, N.A3], leadRoot: N.D4 },
+  { name: 'G',    root: N.G2, notes: [N.G3, N.B3, N.D4], leadRoot: N.G4 },
+  { name: 'C',    root: N.C3, notes: [N.C4, N.E4, N.G4], leadRoot: N.C5 },
+  { name: 'F',    root: N.F3, notes: [N.F3, N.A3, N.C4], leadRoot: N.F4 },
+  { name: 'Bdim', root: N.B2, notes: [N.B3, N.D4, N.F4], leadRoot: N.B4 },
+  { name: 'E',    root: N.E2, notes: [N.E3, N.G3 * 1.0595, N.B3], leadRoot: N.E4 },  // E major (V7)
+  { name: 'Am',   root: N.A2, notes: [N.A3, N.C4, N.E4], leadRoot: N.A4 },
+];
+
+function ensureAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.78;
+  masterGain.connect(audioCtx.destination);
+}
+
+function muteMaster() {
+  if (!audioCtx) return;
+  const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, n);
+  masterGain.gain.linearRampToValueAtTime(0, n + 0.04);
+}
+function unmuteMaster() {
+  if (!audioCtx) return;
+  const n = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(n);
+  masterGain.gain.setValueAtTime(0, n);
+  masterGain.gain.linearRampToValueAtTime(0.78, n + 0.08);
+}
+
+// ─── Voice helpers ────────────────────────────────────────────────────
+
+function panNode(pan) {
+  const p = audioCtx.createStereoPanner();
+  p.pan.value = pan;
+  p.connect(masterGain);
+  return p;
+}
+
+// Universal cleanup: connect an osc.onended to disconnect any number of nodes
+// after the source stops. Without this, Web Audio leaks accumulate over the
+// course of a 3-min song and stall the engine (~30s into playback observed
+// 2026-05-19 ~12:31 PM CT — engine hiccup + silence requiring scrub-rescue).
+function cleanupAfter(osc, ...nodes) {
+  osc.onended = () => {
+    for (const n of nodes) {
+      try { n.disconnect(); } catch (e) { /* already disconnected */ }
+    }
+  };
+}
+
+// Lead — square wave, 8-bit nostalgic, center pan
+function leadNote(at, freq, vol, dur) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 2400;
+  const pan = panNode(0);
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(vol, at + 0.02);
+  gain.gain.linearRampToValueAtTime(vol * 0.65, at + dur * 0.5);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  osc.connect(lp); lp.connect(gain); gain.connect(pan);
+  osc.start(at);
+  osc.stop(at + dur + 0.05);
+  cleanupAfter(osc, lp, gain, pan);
+}
+
+// Bass — sine wave, slow, slight right pan. Held through chord transitions
+// (no per-note fade-out; bass is the structural anchor).
+function bassNote(at, freq, vol, dur) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const pan = panNode(0.3);
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(vol, at + 0.04);
+  gain.gain.setValueAtTime(vol, at + dur - 0.04);
+  gain.gain.linearRampToValueAtTime(0, at + dur);
+  osc.connect(gain); gain.connect(pan);
+  osc.start(at);
+  osc.stop(at + dur + 0.05);
+  cleanupAfter(osc, gain, pan);
+}
+
+// Pads — filtered saw chord, stereo-wide. Slight overlap into next chord
+// for smooth crossfade (no silence-gap at chord boundaries).
+function padChord(at, freqs, vol, dur) {
+  freqs.forEach((f, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(700, at);
+    lp.frequency.linearRampToValueAtTime(1400, at + dur * 0.4);
+    lp.frequency.linearRampToValueAtTime(700, at + dur);
+    osc.type = 'sawtooth';
+    osc.frequency.value = f;
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(vol / freqs.length, at + 0.1);
+    gain.gain.setValueAtTime(vol / freqs.length, at + dur - 0.05);
+    gain.gain.linearRampToValueAtTime(0, at + dur);
+    const panAmt = (i - (freqs.length - 1) / 2) * 0.55 / Math.max(1, freqs.length - 1);
+    const pan = panNode(panAmt);
+    osc.connect(lp); lp.connect(gain); gain.connect(pan);
+    osc.start(at);
+    osc.stop(at + dur + 0.05);
+    cleanupAfter(osc, lp, gain, pan);
+  });
+}
+
+// Counterpoint — triangle, slow pan-sweep across the stereo field
+function counterNote(at, freq, vol, dur, panStart, panEnd) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const panner = audioCtx.createStereoPanner();
+  osc.type = 'triangle';
+  osc.frequency.value = freq;
+  panner.pan.setValueAtTime(panStart, at);
+  panner.pan.linearRampToValueAtTime(panEnd, at + dur);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(vol, at + 0.05);
+  gain.gain.linearRampToValueAtTime(vol * 0.7, at + dur * 0.6);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + dur);
+  osc.connect(gain); gain.connect(panner); panner.connect(masterGain);
+  osc.start(at);
+  osc.stop(at + dur + 0.05);
+  cleanupAfter(osc, gain, panner);
+}
+
+// Percussion: kick + hihat
+function kick(at, vol) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const pan = panNode(0);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(140, at);
+  osc.frequency.exponentialRampToValueAtTime(38, at + 0.13);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(vol, at + 0.005);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.2);
+  osc.connect(gain); gain.connect(pan);
+  osc.start(at);
+  osc.stop(at + 0.22);
+  cleanupAfter(osc, gain, pan);
+}
+function hihat(at, vol) {
+  const bufferSize = 0.05 * audioCtx.sampleRate;
+  const buf = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const gain = audioCtx.createGain();
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 7000;
+  const pan = panNode(-0.15);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(vol, at + 0.002);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
+  src.connect(hp); hp.connect(gain); gain.connect(pan);
+  src.start(at);
+  src.stop(at + 0.06);
+  cleanupAfter(src, hp, gain, pan);
+}
+
+// ─── Lead phrase: melodic motif A (4-bar phrase, repeats across cycles, develops in later sections) ──────
+//
+// Phrase A in scale-degrees (relative to current chord root):
+// Beat:    1   2   3   4   5   6
+// Degree:  1   3   5   3   1   (rest)    ← arpeggio up-down, ends with breath
+// Across an 8-chord cycle (each chord 6 beats), motif loops the same shape pinned to each chord's leadRoot.
+//
+// Section variants:
+//   S1 (cycle 0):  base motif A — sparse, just lead
+//   S2 (cycle 1):  same motif A, bass joins
+//   S3 (cycle 2):  motif A', adds a passing note on beat 4 (1-3-5-6-5-3)
+//   S4 (cycle 3):  motif A' continues; counterpoint plays inverse motif
+//   S5 (cycle 4):  motif A'' — denser, 8th notes (1-3-5-3-5-3-1-3 per chord); percussion peaks
+//   S6 (cycle 5):  back to base motif A — solo lead again, all other voices fade in/out then strip
+
+function leadDegree(section, beatInChord) {
+  // Returns array of {beatOffset, degreeRatio, durBeats} for this section at this beat-in-chord
+  // degreeRatio: multiplier on leadRoot for the note
+  if (section <= 1) {
+    // base motif A: degrees 1 3 5 3 1 (rest on beat 6)
+    if (beatInChord === 0) return [{offset: 0, ratio: 1.0, dur: 1.0}];
+    if (beatInChord === 1) return [{offset: 0, ratio: 1.189, dur: 1.0}];  // minor third
+    if (beatInChord === 2) return [{offset: 0, ratio: 1.498, dur: 1.0}];  // fifth
+    if (beatInChord === 3) return [{offset: 0, ratio: 1.189, dur: 1.0}];
+    if (beatInChord === 4) return [{offset: 0, ratio: 1.0, dur: 2.0}];  // sustain through beat 5 → no end-of-chord lead-gap
+    return [];
+  }
+  if (section <= 3) {
+    // motif A': adds a passing 6th between beat 3 and beat 4-back-to-third
+    if (beatInChord === 0) return [{offset: 0, ratio: 1.0, dur: 1.0}];
+    if (beatInChord === 1) return [{offset: 0, ratio: 1.189, dur: 1.0}];
+    if (beatInChord === 2) return [{offset: 0, ratio: 1.498, dur: 1.0}];
+    if (beatInChord === 3) return [{offset: 0, ratio: 1.682, dur: 0.5}, {offset: 0.5, ratio: 1.498, dur: 0.5}];  // 6 then back to 5
+    if (beatInChord === 4) return [{offset: 0, ratio: 1.189, dur: 1.0}];
+    if (beatInChord === 5) return [{offset: 0, ratio: 1.0, dur: 1.0}];
+    return [];
+  }
+  if (section === 4) {
+    // motif A'': 8th-note density. Pattern: 1 3 5 3 5 3 1 3 (8 notes per chord)
+    const eighths = [1.0, 1.189, 1.498, 1.189, 1.498, 1.189, 1.0, 1.189, 1.498, 1.189, 1.0, 0.840];
+    // 2 eighths per beat * 6 beats = 12 slots; emit 2 per beat
+    return [
+      {offset: 0, ratio: eighths[beatInChord * 2], dur: 0.4},
+      {offset: 0.5, ratio: eighths[beatInChord * 2 + 1], dur: 0.4},
+    ];
+  }
+  // Section 5: same as S1 base motif (the return)
+  if (beatInChord === 0) return [{offset: 0, ratio: 1.0, dur: 1.0}];
+  if (beatInChord === 1) return [{offset: 0, ratio: 1.189, dur: 1.0}];
+  if (beatInChord === 2) return [{offset: 0, ratio: 1.498, dur: 1.0}];
+  if (beatInChord === 3) return [{offset: 0, ratio: 1.189, dur: 1.0}];
+  if (beatInChord === 4) return [{offset: 0, ratio: 1.0, dur: 1.5}];
+  return [];
+}
+
+// Counterpoint motif: inverse of lead — descending where lead ascends
+function counterDegree(section, beatInChord) {
+  if (section < 3 || section > 4) return [];
+  // descending motif: 5 3 1 3 5
+  if (beatInChord === 0) return [{ratio: 0.749, dur: 1.5}];  // octave down + 5
+  if (beatInChord === 2) return [{ratio: 0.595, dur: 1.5}];  // octave down + 3
+  if (beatInChord === 4) return [{ratio: 0.5,   dur: 2.0}];  // octave down
+  return [];
+}
+
+// ─── Beat scheduler ───────────────────────────────────────────────────
+
+function scheduleBeat(b, when) {
+  const cycle = Math.floor(b / BEATS_PER_CYCLE);  // 0..5
+  const beatInCycle = b % BEATS_PER_CYCLE;
+  const chordIdx = Math.floor(beatInCycle / BEATS_PER_CHORD);
+  const beatInChord = beatInCycle % BEATS_PER_CHORD;
+  const chord = CHORDS[chordIdx];
+  const section = cycle;  // 0..5
+
+  // ── LEAD — present in all sections; only stripped briefly in S5 ramp-down
+  if (section >= 0) {
+    const notes = leadDegree(section, beatInChord);
+    let leadVol = 0.18;
+    if (section === 5) leadVol = 0.16;  // soft return
+    if (section === 4) leadVol = 0.13;  // denser climax, individual notes quieter
+    for (const n of notes) {
+      const at = when + n.offset * SEC_PER_BEAT;
+      const freq = chord.leadRoot * n.ratio;
+      leadNote(at, freq, leadVol, n.dur * SEC_PER_BEAT);
+    }
+  }
+
+  // ── BASS — joins section 1+, fades down in section 5 final 12 beats
+  if (section >= 1) {
+    let bassVol = 0.32;
+    if (section === 5 && beatInCycle >= 36) bassVol *= Math.max(0, (48 - beatInCycle) / 12);
+    if (bassVol > 0.005) {
+      // Bass plays on beats 0 and 3 of each chord (whole + half)
+      if (beatInChord === 0) bassNote(when, chord.root, bassVol, SEC_PER_BEAT * 3);
+      if (beatInChord === 3) bassNote(when, chord.root * 1.5, bassVol * 0.85, SEC_PER_BEAT * 3);  // fifth
+    }
+  }
+
+  // ── PADS — section 2+, fades down in section 5 final 18 beats
+  if (section >= 2) {
+    let padVol = 0.20;
+    if (section === 5 && beatInCycle >= 30) padVol *= Math.max(0, (48 - beatInCycle) / 18);
+    if (padVol > 0.005 && beatInChord === 0) {
+      // Pad duration exactly equals chord length (no overlap into next chord —
+      // overlap was causing oscillator-count to creep up + stall the engine
+      // per Elise 2026-05-19 ~12:31 PM CT). The pad's tight in/out ramps
+      // (0.1s attack, 0.05s decay) plus the next chord's 0.1s attack create
+      // a brief 0.05s crossfade region at the boundary without extra
+      // simultaneous-oscillator load.
+      padChord(when, chord.notes, padVol, SEC_PER_BEAT * BEATS_PER_CHORD);
+    }
+  }
+
+  // ── COUNTERPOINT — section 3+ to 4, fades by end of section 4
+  if (section >= 3 && section <= 4) {
+    let counterVol = 0.15;
+    if (section === 4 && beatInCycle >= 36) counterVol *= Math.max(0, (48 - beatInCycle) / 12);
+    const cnotes = counterDegree(section, beatInChord);
+    for (const cn of cnotes) {
+      const freq = chord.leadRoot * cn.ratio;
+      // Slow pan sweep — full cycle takes 48 beats
+      const panPhase = (beatInCycle / 48) * Math.PI * 2;
+      const panStart = Math.sin(panPhase) * 0.6;
+      const panEnd = Math.sin(panPhase + 0.4) * 0.6;
+      counterNote(when, freq, counterVol, cn.dur * SEC_PER_BEAT, panStart, panEnd);
+    }
+  }
+
+  // ── PERCUSSION — section 4 climax only, fades out by end of section 4
+  if (section === 4) {
+    let percVol = 0.30;
+    if (beatInCycle >= 36) percVol *= Math.max(0, (48 - beatInCycle) / 12);
+    if (percVol > 0.005) {
+      // Kick on beats 0 and 3 of each chord
+      if (beatInChord === 0) kick(when, percVol * 0.9);
+      if (beatInChord === 3) kick(when, percVol * 0.7);
+      // Hihat 16ths
+      for (let s = 0; s < 4; s++) {
+        const subWhen = when + s * (SEC_PER_BEAT / 4);
+        const accent = s === 2 ? 0.9 : 0.55;
+        hihat(subWhen, percVol * 0.18 * accent);
+      }
+    }
+  }
+}
+
+function scheduler() {
+  if (!playing) return;
+  // Defensive cap: if nextBeatTime ever falls way behind audioCtx.currentTime
+  // (e.g., the engine stalled briefly and the while-loop tries to catch up),
+  // skip ahead instead of stampeding the audio engine with N oscillator-
+  // creations at once. Limit to 4 beats per scheduler tick.
+  let scheduled = 0;
+  while (nextBeatTime < audioCtx.currentTime + LOOKAHEAD_SEC && scheduled < 4) {
+    scheduleBeat(beatIdx % TOTAL_BEATS, nextBeatTime);
+    beatIdx++;
+    nextBeatTime += SEC_PER_BEAT;
+    scheduled++;
+  }
+  // If we hit the cap, snap nextBeatTime forward so we don't lag further.
+  if (scheduled >= 4 && nextBeatTime < audioCtx.currentTime) {
+    const skipBeats = Math.ceil((audioCtx.currentTime - nextBeatTime) / SEC_PER_BEAT);
+    beatIdx += skipBeats;
+    nextBeatTime += skipBeats * SEC_PER_BEAT;
+  }
+}
+
+function updatePos() {
+  if (!playing || !audioCtx) return;
+  const elapsed = audioCtx.currentTime - startTime;
+  const totalSec = TOTAL_BEATS * SEC_PER_BEAT;
+  const loopElapsed = elapsed % totalSec;
+  const loopNum = Math.floor(elapsed / totalSec);
+  const m = Math.floor(loopElapsed / 60);
+  const s = Math.floor(loopElapsed % 60);
+  const tm = Math.floor(totalSec / 60);
+  const ts = Math.floor(totalSec % 60);
+  const loopSuffix = loopNum >= 1 ? ` · loop ${loopNum + 1}` : '';
+  document.getElementById('pos').textContent =
+    `${m}:${String(s).padStart(2,'0')} / ${tm}:${String(ts).padStart(2,'0')}${loopSuffix}`;
+  document.getElementById('scrubber').value = Math.floor((loopElapsed / totalSec) * 1000);
+
+  const b = Math.floor(loopElapsed / SEC_PER_BEAT) % TOTAL_BEATS;
+  const cycle = Math.floor(b / BEATS_PER_CYCLE);
+  const beatInCycle = b % BEATS_PER_CYCLE;
+  const chordIdx = Math.floor(beatInCycle / BEATS_PER_CHORD);
+  const section = cycle;
+
+  // Chord display
+  document.getElementById('chord-display').textContent = CHORDS[chordIdx].name;
+
+  // Section cells
+  for (let i = 0; i < 6; i++) {
+    document.getElementById(`sec-${i}`).classList.toggle('active', i === section);
+  }
+
+  // Voice fill bars — based on section + fade behavior
+  let v1 = 1;  // lead always present
+  let v2 = section >= 1 ? 1 : 0;
+  if (section === 5 && beatInCycle >= 36) v2 = (48 - beatInCycle) / 12;
+  let v3 = section >= 2 ? 1 : 0;
+  if (section === 5 && beatInCycle >= 30) v3 = (48 - beatInCycle) / 18;
+  let v4 = (section === 3 || section === 4) ? 1 : 0;
+  if (section === 4 && beatInCycle >= 36) v4 = (48 - beatInCycle) / 12;
+  let v5 = section === 4 ? 1 : 0;
+  if (section === 4 && beatInCycle >= 36) v5 = (48 - beatInCycle) / 12;
+
+  document.getElementById('v1-fill').style.width = `${Math.round(Math.max(0, v1) * 100)}%`;
+  document.getElementById('v2-fill').style.width = `${Math.round(Math.max(0, v2) * 100)}%`;
+  document.getElementById('v3-fill').style.width = `${Math.round(Math.max(0, v3) * 100)}%`;
+  document.getElementById('v4-fill').style.width = `${Math.round(Math.max(0, v4) * 100)}%`;
+  document.getElementById('v5-fill').style.width = `${Math.round(Math.max(0, v5) * 100)}%`;
+}
+
+function toggleTrack() {
+  ensureAudio();
+  if (playing) {
+    playing = false;
+    muteMaster();
+    clearInterval(schedulerInterval);
+    document.getElementById('play-btn').textContent = '▶ PLAY';
+    document.getElementById('play-btn').classList.remove('playing');
+    document.getElementById('title').classList.add('dim');
+  } else {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    unmuteMaster();
+    playing = true;
+    if (beatIdx === 0) {
+      startTime = audioCtx.currentTime;
+      nextBeatTime = startTime + 0.1;
+    } else {
+      startTime = audioCtx.currentTime - (beatIdx % TOTAL_BEATS) * SEC_PER_BEAT;
+      nextBeatTime = audioCtx.currentTime + 0.05;
+    }
+    schedulerInterval = setInterval(() => { scheduler(); updatePos(); }, SCHEDULER_INTERVAL_MS);
+    document.getElementById('play-btn').textContent = '⏸ PAUSE';
+    document.getElementById('play-btn').classList.add('playing');
+    document.getElementById('title').classList.remove('dim');
+  }
+}
+
+function scrubTo(val) {
+  if (!audioCtx) return;
+  const fraction = val / 1000;
+  beatIdx = Math.floor(fraction * TOTAL_BEATS);
+  if (playing) {
+    muteMaster();
+    startTime = audioCtx.currentTime - beatIdx * SEC_PER_BEAT;
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    setTimeout(unmuteMaster, 50);
+  }
+  updatePos();
+}
+</script>
+
+</body>
+</html>
