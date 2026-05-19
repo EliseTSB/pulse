@@ -17,8 +17,15 @@
   }
   #stage { max-width: 1080px; margin: 0 auto; }
   header { text-align: center; margin-bottom: 24px; padding-top: 16px; }
-  h1 { font-size: 48px; font-weight: 200; letter-spacing: 10px; color: #f5d0c5;
-       text-shadow: 0 0 30px rgba(245,208,197,0.4); }
+  h1 { font-size: 48px; font-weight: 200; letter-spacing: 10px;
+       color: #f5d0c5; text-shadow: 0 0 30px rgba(245,208,197,0.4); }
+  h1 .pulse-grad {
+    background: linear-gradient(90deg, #7c3aed, #ec4899, #fbbf24, #10b981);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 60px rgba(236,72,153,0.25);
+  }
   .album-meta { font-size: 11px; letter-spacing: 4px; color: #6b7280;
                 text-transform: uppercase; margin-top: 8px; }
 
@@ -150,8 +157,8 @@
 
 <div id="stage">
   <header>
-    <h1>pulse · player</h1>
-    <div class="album-meta">6 tracks · web audio · 2026-05-18 → 2026-05-19</div>
+    <h1><span class="pulse-grad">pulse</span> · player</h1>
+    <div class="album-meta">7 tracks · web audio · 2026-05-18 → 2026-05-19</div>
   </header>
 
   <div class="main-grid">
@@ -189,7 +196,7 @@
     </div>
   </div>
 
-  <a class="back-link" href="2026-05-18-album-pulse-index.html">← static index</a>
+  <a class="back-link" href="index.html">← static index</a>
 </div>
 
 <script>
