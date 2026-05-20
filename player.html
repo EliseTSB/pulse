@@ -180,7 +180,7 @@
         <button class="ctrl-btn" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">🔀 <span class="ctrl-label">shuffle</span></button>
         <button class="ctrl-btn" id="btn-loop" onclick="cycleLoopMode()" title="Loop mode (off / all / one)">🔁 <span class="ctrl-label" id="loop-label">loop:all</span></button>
         <button class="ctrl-btn active" id="btn-auto" onclick="toggleAutoAdvance()" title="Auto-advance at end of each track-loop">🔄 <span class="ctrl-label">auto-advance</span></button>
-        <button class="ctrl-btn" id="btn-order" onclick="toggleOrder()" title="Order: design-time (chronological by when built) vs listening-flow (re-sequenced for arc)">🗂 <span class="ctrl-label" id="order-label">order:design</span></button>
+        <button class="ctrl-btn active" id="btn-order" onclick="toggleOrder()" title="Order: design-time (chronological by when built) vs listening-flow (re-sequenced for arc)">🗂 <span class="ctrl-label" id="order-label">order:listen</span></button>
       </div>
     </div>
 
@@ -224,7 +224,7 @@ const ORDER_LISTEN = [
   'cold-start', 'first-run', 'channels', 'heartbeat', 'reach-first', 'two-way-mirror', 'tautology',
 ];
 
-let viewOrder = 'design';  // 'design' | 'listen'
+let viewOrder = 'listen';  // 'design' | 'listen' — defaults to Claude's picked listening-flow order per Elise 2026-05-20 ~9:34 AM CT
 function buildPlaylist(order) {
   const ids = order === 'listen' ? ORDER_LISTEN : ORDER_DESIGN;
   return ids.map(id => TRACKS[id]);
